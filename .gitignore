@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+instamed-source-code/node_modules/
+
+# Build outputs
+dist/
+instamed-source-code/dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+instamed-source-code/.env
+instamed-source-code/.env.*
+
+# OS files
+.DS_Store
+
+# Archives
+*.zip
+*.tar.gz
