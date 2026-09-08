@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/Navbar';
 import { ClinicCard } from '@/components/ClinicCard';
 import { useClinicLocations } from '@/hooks/useClinicLocations';
+import { Geolocation } from '@capacitor/geolocation';
 
 export default function ClinicFinder() {
     const { clinics, isLoading, userLocation } = useClinicLocations();
@@ -95,15 +96,16 @@ export default function ClinicFinder() {
                             <Button
                                 className="absolute bottom-6 right-6 shadow-xl"
                                 variant="secondary"
-                                onClick={() => {
-                                    if (navigator.geolocation) {
-                                        navigator.geolocation.getCurrentPosition((pos) => {
-                                            const { latitude, longitude } = pos.coords;
-                                            window.open(
-                                                `https://www.openstreetmap.org/#map=14/${latitude}/${longitude}`,
-                                                '_blank'
-                                            );
-                                        });
+                                onClick={async () => {
+                                    try {
+                                        const pos = await Geolocation.getCurrentPosition();
+                                        const { latitude, longitude } = pos.coords;
+                                        window.open(
+                                            `https://www.openstreetmap.org/#map=14/${latitude}/${longitude}`,
+                                            '_blank'
+                                        );
+                                    } catch (e) {
+                                        console.warn("Could not get location", e);
                                     }
                                 }}
                             >

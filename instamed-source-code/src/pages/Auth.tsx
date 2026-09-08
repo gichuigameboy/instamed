@@ -57,10 +57,10 @@ export default function Auth() {
         const { error } = await signUp(email, password, metadata);
         if (error) throw error;
         toast({ 
-          title: 'Account created!', 
-          description: 'Please check your email to verify your account.' 
+          title: 'Welcome!', 
+          description: 'Your account has been created successfully.' 
         });
-        navigate('/verify-email');
+        navigate('/dashboard');
       }
     } catch (error: any) {
       toast({

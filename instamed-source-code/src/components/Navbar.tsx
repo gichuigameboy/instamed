@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Menu, X, User, LogOut, Calendar, Settings } from 'lucide-react';
+import { Menu, X, User, LogOut, Calendar, Settings, PhoneCall, MessageSquare } from 'lucide-react';
 import logo from '@/assets/logo.jpeg';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,19 +14,24 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth';
 
-const navLinks = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/doctors', label: 'Find Doctors' },
-  { href: '/appointments', label: 'Appointments' },
-  { href: '/ai-symptom-checker', label: 'AI Checker' },
-  { href: '/clinics', label: 'Clinics' },
-];
+// Removed hardcoded navLinks here, moved inside the component to use isDoctor
 
 export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, isDoctor, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const navLinks = [
+    { href: '/dashboard', label: 'Dashboard' },
+    ...(!isDoctor ? [{ href: '/doctors', label: 'Find Doctors' }] : []),
+    { href: '/appointments', label: 'Appointments' },
+    { href: '/messages', label: 'Messages' },
+    ...(!isDoctor ? [
+      { href: '/ai-symptom-checker', label: 'AI Checker' },
+      { href: '/clinics', label: 'Clinics' }
+    ] : []),
+  ];
 
   const handleSignOut = async () => {
     await signOut();
@@ -34,8 +39,8 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
+    <header className="sticky top-4 z-50 w-full px-4 mb-8">
+      <div className="container max-w-6xl mx-auto flex h-16 items-center justify-between glass-nav rounded-full px-6">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="InstaMed Logo" className="h-10 w-10 object-contain rounded-full" />
@@ -60,6 +65,18 @@ export function Navbar() {
 
         {/* Right Side */}
         <div className="flex items-center gap-4">
+          <Button variant="destructive" size="sm" className="hidden sm:flex rounded-full animate-pulse" asChild>
+            <a href="tel:922">
+              <PhoneCall className="w-4 h-4 mr-2" />
+              SOS (922)
+            </a>
+          </Button>
+          <Button variant="destructive" size="icon" className="sm:hidden rounded-full animate-pulse" asChild>
+            <a href="tel:922">
+              <PhoneCall className="w-4 h-4" />
+            </a>
+          </Button>
+
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -100,6 +117,12 @@ export function Navbar() {
                   <Link to="/appointments" className="flex items-center">
                     <Calendar className="mr-2 h-4 w-4" />
                     Appointments
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/messages" className="flex items-center">
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Messages
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>

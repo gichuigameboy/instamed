@@ -38,7 +38,7 @@ interface Appointment {
 }
 
 export default function Dashboard() {
-  const { user, profile } = useAuth();
+  const { user, profile, isDoctor } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -49,40 +49,46 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
-        .eq('patient_id', user.id)
+        .or(`patient_id.eq.${user.id},doctor_id.eq.${user.id}`)
         .order('scheduled_at', { ascending: true })
         .limit(5);
 
       if (!error && data) {
-        // Fetch doctor profiles for each appointment
-        const appointmentsWithDoctors = await Promise.all(
+        // Fetch profiles for the OTHER person in each appointment
+        const appointmentsWithProfiles = await Promise.all(
           data.map(async (apt) => {
-            const { data: doctorProfile } = await supabase
-              .from('doctor_profiles')
-              .select('specialization')
-              .eq('user_id', apt.doctor_id)
-              .maybeSingle();
+            const otherUserId = isDoctor ? apt.patient_id : apt.doctor_id;
 
-            const { data: doctorInfo } = await supabase
+            const { data: otherInfo } = await supabase
               .from('profiles')
               .select('first_name, last_name, avatar_url')
-              .eq('user_id', apt.doctor_id)
+              .eq('user_id', otherUserId)
               .maybeSingle();
+
+            let docProfile = null;
+            if (!isDoctor) {
+              const { data } = await supabase
+                .from('doctor_profiles')
+                .select('specialization')
+                .eq('user_id', apt.doctor_id)
+                .maybeSingle();
+              docProfile = data;
+            }
 
             return {
               ...apt,
-              doctor_profile: doctorProfile,
-              doctor_info: doctorInfo,
+              doctor_profile: docProfile,
+              doctor_info: otherInfo,
             };
           })
         );
-        setAppointments(appointmentsWithDoctors);
+        setAppointments(appointmentsWithProfiles);
       }
       setIsLoading(false);
     };
 
     fetchAppointments();
-  }, [user]);
+  }, [user, profile]);
 
   const upcomingAppointments = appointments.filter(
     apt => new Date(apt.scheduled_at) > new Date() && apt.status !== 'cancelled'
@@ -124,10 +130,10 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background mesh-bg">
       <Navbar />
 
-      <main className="container py-8">
+      <main className="container max-w-7xl mx-auto py-8 px-4">
         {/* Welcome Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -147,9 +153,9 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10"
         >
-          <Card className="border-none shadow-sm">
+          <Card className="glass-panel border-none hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -163,7 +169,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
+          <Card className="glass-panel border-none hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
@@ -177,7 +183,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
+          <Card className="glass-panel border-none hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
@@ -191,7 +197,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
+          <Card className="glass-panel border-none hover-lift">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
@@ -214,8 +220,8 @@ export default function Dashboard() {
             transition={{ delay: 0.2 }}
             className="lg:col-span-2"
           >
-            <Card className="border-none shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <Card className="glass-panel border-none h-full">
+              <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/50">
                 <CardTitle className="text-lg font-semibold">Upcoming Appointments</CardTitle>
                 <Button variant="ghost" size="sm" asChild>
                   <Link to="/appointments">
@@ -241,21 +247,26 @@ export default function Dashboard() {
                     <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
                     <h3 className="font-medium text-foreground mb-2">No upcoming appointments</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Book a consultation with one of our doctors
+                      {isDoctor 
+                        ? "You don't have any patients scheduled yet." 
+                        : "Book a consultation with one of our doctors"}
                     </p>
-                    <Button asChild>
-                      <Link to="/doctors">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Book Appointment
-                      </Link>
-                    </Button>
+                    {!isDoctor && (
+                      <Button asChild>
+                        <Link to="/doctors">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Book Appointment
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {upcomingAppointments.map((apt) => (
+                    {upcomingAppointments.map((apt) => {
+                      return (
                       <div
                         key={apt.id}
-                        className="appointment-card flex items-center gap-4 p-4 rounded-xl bg-muted/30 hover:bg-muted/50"
+                        className="appointment-card flex items-center gap-4 p-4 rounded-xl bg-background/40 hover:bg-background/80 border border-transparent hover:border-border transition-all cursor-pointer"
                       >
                         <Avatar className="w-12 h-12">
                           <AvatarImage src={apt.doctor_info?.avatar_url || ''} />
@@ -265,10 +276,10 @@ export default function Dashboard() {
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-foreground truncate">
-                            Dr. {apt.doctor_info?.first_name} {apt.doctor_info?.last_name}
+                            {isDoctor ? 'Patient: ' : 'Dr. '} {apt.doctor_info?.first_name} {apt.doctor_info?.last_name}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {apt.doctor_profile?.specialization || 'General Practice'}
+                            {isDoctor ? 'Patient Appointment' : apt.doctor_profile?.specialization || 'General Practice'}
                           </p>
                         </div>
                         <div className="text-right">
@@ -282,7 +293,7 @@ export default function Dashboard() {
                           {apt.status}
                         </Badge>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
               </CardContent>
@@ -295,60 +306,66 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card className="border-none shadow-sm">
-              <CardHeader className="pb-4">
+            <Card className="glass-panel border-none">
+              <CardHeader className="pb-4 border-b border-border/50">
                 <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
-                  <Link to="/doctors">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mr-3">
-                      <User className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium">Find a Doctor</p>
-                      <p className="text-xs text-muted-foreground">Browse specialists</p>
-                    </div>
-                  </Link>
-                </Button>
+              <CardContent className="p-4 space-y-3">
+                {!isDoctor && (
+                  <Button variant="outline" className="w-full justify-start h-auto py-4 bg-background/50 hover:bg-background/80 hover-lift border-white/10" asChild>
+                    <Link to="/doctors">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mr-3">
+                        <User className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium">Find a Doctor</p>
+                        <p className="text-xs text-muted-foreground">Browse specialists</p>
+                      </div>
+                    </Link>
+                  </Button>
+                )}
 
-                <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
+                <Button variant="outline" className="w-full justify-start h-auto py-4 bg-background/50 hover:bg-background/80 hover-lift border-white/10" asChild>
                   <Link to="/appointments">
                     <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center mr-3">
                       <Calendar className="w-5 h-5 text-accent" />
                     </div>
                     <div className="text-left">
-                      <p className="font-medium">My Appointments</p>
+                      <p className="font-medium">{isDoctor ? 'Patient Appointments' : 'My Appointments'}</p>
                       <p className="text-xs text-muted-foreground">View & manage</p>
                     </div>
                   </Link>
                 </Button>
 
-                <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
-                  <Link to="/ai-symptom-checker">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mr-3">
-                      <Activity className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium">AI Symptom Checker</p>
-                      <p className="text-xs text-muted-foreground">Instant health insights</p>
-                    </div>
-                  </Link>
-                </Button>
+                {!isDoctor && (
+                  <>
+                    <Button variant="outline" className="w-full justify-start h-auto py-4 bg-background/50 hover:bg-background/80 hover-lift border-white/10" asChild>
+                      <Link to="/ai-symptom-checker">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mr-3">
+                          <Activity className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-medium">AI Symptom Checker</p>
+                          <p className="text-xs text-muted-foreground">Instant health insights</p>
+                        </div>
+                      </Link>
+                    </Button>
 
-                <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
-                  <Link to="/clinics">
-                    <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mr-3">
-                      <MapPin className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium">Clinic Finder</p>
-                      <p className="text-xs text-muted-foreground">Find care near you</p>
-                    </div>
-                  </Link>
-                </Button>
+                    <Button variant="outline" className="w-full justify-start h-auto py-4 bg-background/50 hover:bg-background/80 hover-lift border-white/10" asChild>
+                      <Link to="/clinics">
+                        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mr-3">
+                          <MapPin className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-medium">Clinic Finder</p>
+                          <p className="text-xs text-muted-foreground">Find care near you</p>
+                        </div>
+                      </Link>
+                    </Button>
+                  </>
+                )}
 
-                <Button variant="outline" className="w-full justify-start h-auto py-4" asChild>
+                <Button variant="outline" className="w-full justify-start h-auto py-4 bg-background/50 hover:bg-background/80 hover-lift border-white/10" asChild>
                   <Link to="/profile">
                     <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center mr-3">
                       <FileText className="w-5 h-5 text-success" />
@@ -363,7 +380,7 @@ export default function Dashboard() {
             </Card>
 
             {/* Health Tip */}
-            <Card className="border-none shadow-sm mt-4 bg-primary/5">
+            <Card className="glass-panel border-none mt-6 bg-primary/5 hover-lift">
               <CardContent className="p-6">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">

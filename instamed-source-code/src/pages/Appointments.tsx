@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { Calendar, Clock, Video, Phone, MapPin, MoreVertical, X } from 'lucide-react';
+import { Calendar, Clock, Video, Phone, MapPin, MoreVertical, X, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,6 +18,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
+import { ChatDrawer } from '@/components/ChatDrawer';
 
 interface Appointment {
   id: string;
@@ -37,10 +38,11 @@ interface Appointment {
 }
 
 export default function Appointments() {
-  const { user } = useAuth();
+  const { user, profile, isDoctor } = useAuth();
   const { toast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [chatAppointment, setChatAppointment] = useState<Appointment | null>(null);
 
   const fetchAppointments = async () => {
     if (!user) return;
@@ -48,32 +50,39 @@ export default function Appointments() {
     const { data, error } = await supabase
       .from('appointments')
       .select('*')
-      .eq('patient_id', user.id)
+      .or(`patient_id.eq.${user.id},doctor_id.eq.${user.id}`)
       .order('scheduled_at', { ascending: true });
 
     if (!error && data) {
-      const appointmentsWithDoctors = await Promise.all(
+      const appointmentsWithProfiles = await Promise.all(
         data.map(async (apt) => {
-          const { data: doctorProfile } = await supabase
-            .from('doctor_profiles')
-            .select('specialization')
-            .eq('user_id', apt.doctor_id)
-            .maybeSingle();
-
-          const { data: doctorInfo } = await supabase
+          // Fetch the other person's profile
+          const otherUserId = isDoctor ? apt.patient_id : apt.doctor_id;
+          
+          const { data: otherInfo } = await supabase
             .from('profiles')
             .select('first_name, last_name, avatar_url')
-            .eq('user_id', apt.doctor_id)
+            .eq('user_id', otherUserId)
             .maybeSingle();
+            
+          let docProfile = null;
+          if (!isDoctor) {
+            const { data } = await supabase
+              .from('doctor_profiles')
+              .select('specialization')
+              .eq('user_id', apt.doctor_id)
+              .maybeSingle();
+            docProfile = data;
+          }
 
           return {
             ...apt,
-            doctor_profile: doctorProfile,
-            doctor_info: doctorInfo,
+            doctor_profile: docProfile, // Only used when user is patient
+            doctor_info: otherInfo, // We hijack this property so we don't have to rewrite AppointmentCard completely
           };
         })
       );
-      setAppointments(appointmentsWithDoctors);
+      setAppointments(appointmentsWithProfiles);
     }
     setIsLoading(false);
   };
@@ -157,14 +166,14 @@ export default function Appointments() {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2 mb-1">
                 <h3 className="font-semibold text-foreground">
-                  Dr. {appointment.doctor_info?.first_name} {appointment.doctor_info?.last_name}
+                  {isDoctor ? 'Patient: ' : 'Dr. '} {appointment.doctor_info?.first_name} {appointment.doctor_info?.last_name}
                 </h3>
                 <Badge className={getStatusColor(appointment.status)}>
                   {appointment.status}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-3">
-                {appointment.doctor_profile?.specialization || 'General Practice'}
+                {isDoctor ? 'Patient Appointment' : appointment.doctor_profile?.specialization || 'General Practice'}
               </p>
 
               <div className="flex flex-wrap gap-4 text-sm">
@@ -207,16 +216,24 @@ export default function Appointments() {
             )}
           </div>
 
-          {!isPast && !isCancelled && appointment.consultation_type === 'video' && (
-            <div className="mt-4 pt-4 border-t border-border">
-              <Button className="w-full" variant="outline" asChild>
+          <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:flex-row">
+            {!isPast && !isCancelled && appointment.consultation_type === 'video' && (
+              <Button className="w-full sm:flex-1" variant="outline" asChild>
                 <Link to={`/video-call/${appointment.id}`}>
                   <Video className="w-4 h-4 mr-2" />
                   Join Video Call
                 </Link>
               </Button>
-            </div>
-          )}
+            )}
+            <Button 
+              className="w-full sm:flex-1" 
+              variant="secondary"
+              onClick={() => setChatAppointment(appointment)}
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Message {isDoctor ? 'Patient' : 'Doctor'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -273,11 +290,15 @@ export default function Appointments() {
                   No upcoming appointments
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  Book a consultation with one of our doctors
+                  {isDoctor 
+                    ? "You don't have any patients scheduled yet." 
+                    : "Book a consultation with one of our doctors"}
                 </p>
-                <Button asChild>
-                  <Link to="/doctors">Find a Doctor</Link>
-                </Button>
+                {!isDoctor && (
+                  <Button asChild>
+                    <Link to="/doctors">Find a Doctor</Link>
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -321,6 +342,12 @@ export default function Appointments() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <ChatDrawer 
+        isOpen={!!chatAppointment} 
+        onClose={() => setChatAppointment(null)} 
+        appointment={chatAppointment} 
+      />
     </div>
   );
 }

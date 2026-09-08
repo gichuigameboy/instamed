@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Geolocation } from '@capacitor/geolocation';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface Clinic {
@@ -137,19 +138,19 @@ export function useClinicLocations() {
 
     // Get user location
     useEffect(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                },
-                () => {
-                    // Default to Nairobi CBD if geolocation denied
-                    setUserLocation({ lat: -1.2864, lng: 36.8172 });
-                }
-            );
-        } else {
-            setUserLocation({ lat: -1.2864, lng: 36.8172 });
-        }
+        const fetchLocation = async () => {
+            try {
+                // In a browser this prompts the web permission, on mobile it prompts the native OS permission.
+                const coordinates = await Geolocation.getCurrentPosition();
+                setUserLocation({ lat: coordinates.coords.latitude, lng: coordinates.coords.longitude });
+            } catch (error) {
+                console.warn('Geolocation error or denied, defaulting to Nairobi CBD', error);
+                // Default to Nairobi CBD if geolocation denied or fails
+                setUserLocation({ lat: -1.2864, lng: 36.8172 });
+            }
+        };
+
+        fetchLocation();
     }, []);
 
     useEffect(() => {

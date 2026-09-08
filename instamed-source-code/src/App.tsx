@@ -12,6 +12,7 @@ import Settings from '@/pages/Settings';
 import VideoCall from '@/pages/VideoCall';
 import AISymptomChecker from '@/pages/AISymptomChecker';
 import ClinicFinder from '@/pages/ClinicFinder';
+import Messages from '@/pages/Messages';
 import AdminDashboard from '@/pages/AdminDashboard';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import TermsOfService from '@/pages/TermsOfService';
@@ -49,6 +50,7 @@ function AppRoutes() {
       <Route path="/video-call/:appointmentId" element={<ProtectedRoute><VideoCall /></ProtectedRoute>} />
       <Route path="/ai-symptom-checker" element={<ProtectedRoute><AISymptomChecker /></ProtectedRoute>} />
       <Route path="/clinics" element={<ProtectedRoute><ClinicFinder /></ProtectedRoute>} />
+      <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
@@ -57,11 +59,14 @@ function AppRoutes() {
   );
 }
 
+import { LiveUsersWidget } from '@/components/LiveUsersWidget';
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
+        <LiveUsersWidget />
         <Toaster />
       </AuthProvider>
     </BrowserRouter>
